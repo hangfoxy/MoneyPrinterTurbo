@@ -49,7 +49,8 @@ class SubClippedVideoClip:
 
 audio_codec = "aac"
 video_codec = "libx264"
-fps = 30
+# fps = 30
+fps = 24
 
 def close_clip(clip):
     if clip is None:
@@ -524,7 +525,8 @@ def preprocess_video(materials: List[MaterialInfo], clip_duration=4):
 
             # Output the video to a file.
             video_file = f"{material.url}.mp4"
-            final_clip.write_videofile(video_file, fps=30, logger=None)
+            # final_clip.write_videofile(video_file, fps=30, logger=None)
+            final_clip.write_videofile(video_file, threads = 2, fps=24, logger=None)
             close_clip(clip)
             material.url = video_file
             logger.success(f"image processed: {video_file}")

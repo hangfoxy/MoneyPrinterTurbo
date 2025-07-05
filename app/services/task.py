@@ -1,6 +1,7 @@
 import math
 import os.path
 import re
+import subprocess
 from os import path
 
 from loguru import logger
@@ -270,6 +271,9 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
         task_id, params, video_script, sub_maker, audio_file
     )
 
+    # 4.1 Generate fast subtitle read
+    utils.process_srt_file_complete(subtitle_path, subtitle_path)
+
     if stop_at == "subtitle":
         sm.state.update_task(
             task_id,
@@ -326,6 +330,22 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
     )
+
+    # 6.1 backup the file into google drive when finished execution.
+    command = [
+        'rclone',
+        'copy',
+        f'{utils.task_dir(task_id)}',
+        f'gdrive:/Money/{task_id}'
+    ]
+
+    # Execute the command
+    try:
+        subprocess.run(command, check=True)
+        print(f"{task_id} Copy successful.")
+    except subprocess.CalledProcessError as e:
+        print(f"{task_id} Error occurred: {e}")
+
     return kwargs
 
 

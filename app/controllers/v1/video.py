@@ -25,9 +25,11 @@ from app.models.schema import (
     TaskQueryResponse,
     TaskResponse,
     TaskVideoRequest,
+    VideoScriptRequest,
 )
 from app.services import state as sm
 from app.services import task as tm
+from app.services import llm
 from app.utils import utils
 
 # 认证依赖项
@@ -285,3 +287,66 @@ async def download_video(_: Request, file_path: str):
         filename=f"{filename}{extension}",
         media_type=f"video/{extension[1:]}",
     )
+
+@router.post("/allinone",response_model=TaskResponse,summary="Input Title Auto Generate other conent")
+def allione_video(request: Request, body: VideoScriptRequest):
+    video_script = llm.generate_script(
+        video_subject=body.video_subject,
+        language=body.video_language,
+        paragraph_number=body.paragraph_number,
+    )
+
+    video_terms = llm.generate_terms(
+        video_subject=body.video_subject,
+        video_script=video_script,
+        amount=5,
+    )
+
+    if body.video_language == "vi":
+        voice_name = "vi-VN-HoaiMyNeural"
+    elif body.video_language == "zh":
+        voice_name="zh-CN-XiaoyiNeural-Female"
+    else:
+        body.video_language == "en"
+        voice_name = "en-AU-NatashaNeural"
+
+    body = {
+    "video_subject": body.video_subject,
+    "video_script": video_script,
+    "video_terms": video_terms,
+    "video_aspect": "9:16",
+    "video_concat_mode": "random",
+    "video_transition_mode": "None",
+    "video_clip_duration": 5,
+    "video_count": 1,
+    "video_source": "pexels",
+    "video_materials": [
+        {
+        "provider": "pexels",
+        "url": "",
+        "duration": 0
+        }
+    ],
+    "video_language": body.video_language,
+    "voice_name": voice_name,
+    "voice_volume": 1,
+    "voice_rate": 1,
+    "bgm_type": "random",
+    "bgm_file": "",
+    "bgm_volume": 0.2,
+    "subtitle_enabled": True,
+    "subtitle_position": "center",
+    "custom_position": 70,
+    "font_name": "Charm-Bold.ttf",
+    "text_fore_color": "#FFFFFF",
+    "text_background_color": True,
+    "font_size": 90,
+    "stroke_color": "#000000",
+    "stroke_width": 1.5,
+    "n_threads": 4,
+    "paragraph_number": body.paragraph_number
+    }
+
+    re_body = TaskVideoRequest(**body)
+
+    return create_task(request, re_body, stop_at="video")

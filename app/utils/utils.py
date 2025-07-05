@@ -228,3 +228,172 @@ def load_locales(i18n_dir):
 
 def parse_extension(filename):
     return Path(filename).suffix.lower().lstrip('.')
+
+
+def parse_timestamp(timestamp_str):
+    """Convert timestamp string to milliseconds"""
+    time_part = timestamp_str.replace(',', '.')
+    h, m, s = time_part.split(':')
+    return int(float(h) * 3600000 + float(m) * 60000 + float(s) * 1000)
+
+def format_timestamp(milliseconds):
+    """Convert milliseconds back to SRT timestamp format"""
+    hours = milliseconds // 3600000
+    minutes = (milliseconds % 3600000) // 60000
+    seconds = (milliseconds % 60000) // 1000
+    ms = milliseconds % 1000
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{ms:03d}"
+
+def split_subtitle_line_to_words(subtitle_line):
+    """
+    Split a subtitle line into individual words with evenly distributed timestamps
+    
+    Args:
+        subtitle_line (str): Single subtitle line in format "start --> end text"
+    
+    Returns:
+        list: List of subtitle lines with individual words
+    """
+    # Parse the input line
+    parts = subtitle_line.split(' --> ')
+    if len(parts) != 2:
+        raise ValueError("Invalid subtitle format")
+    
+    start_time_str = parts[0]
+    end_and_text = parts[1].split(' ', 1)
+    end_time_str = end_and_text[0]
+    text = end_and_text[1] if len(end_and_text) > 1 else ""
+    
+    # Convert timestamps to milliseconds
+    start_ms = parse_timestamp(start_time_str)
+    end_ms = parse_timestamp(end_time_str)
+    
+    # Split text into words
+    words = text.split()
+    if not words:
+        return []
+    
+    # Calculate time duration per word
+    total_duration = end_ms - start_ms
+    duration_per_word = total_duration / len(words)
+    
+    # Create subtitle lines for each word
+    result = []
+    for i, word in enumerate(words):
+        word_start = start_ms + int(i * duration_per_word)
+        word_end = start_ms + int((i + 1) * duration_per_word)
+        
+        # Ensure the last word ends at the original end time
+        if i == len(words) - 1:
+            word_end = end_ms
+        
+        start_formatted = format_timestamp(word_start)
+        end_formatted = format_timestamp(word_end)
+        
+        result.append(f"{start_formatted} --> {end_formatted} {word}")
+    
+    return result
+
+def read_srt_file(file_path):
+    """
+    Read and parse SRT file
+    
+    Args:
+        file_path (str): Path to the SRT file
+    
+    Returns:
+        list: List of subtitle entries, each containing sequence, timing, and text
+    """
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    # Split by double newlines to separate subtitle blocks
+    blocks = content.strip().split('\n\n')
+    subtitles = []
+    
+    for block in blocks:
+        lines = block.strip().split('\n')
+        if len(lines) >= 3:
+            sequence = lines[0]
+            timing = lines[1]
+            text = ' '.join(lines[2:])  # Join multiple text lines
+            subtitles.append({
+                'sequence': sequence,
+                'timing': timing,
+                'text': text
+            })
+    
+    return subtitles
+
+def process_srt_file(subtitles):
+    """
+    Process subtitle entries and return word-split results with proper SRT formatting
+    
+    Args:
+        subtitles (list): List of subtitle dictionaries from read_srt_file
+    
+    Returns:
+        str: Complete SRT content with word-split subtitles
+    """
+    result_lines = []
+    sequence_counter = 1
+    
+    for subtitle in subtitles:
+        timing = subtitle['timing']
+        text = subtitle['text']
+        
+        # Create the timing line with text for processing
+        timing_with_text = f"{timing} {text}"
+        
+        # Split into words
+        word_lines = split_subtitle_line_to_words(timing_with_text)
+        
+        # Add each word as a separate subtitle entry
+        for word_line in word_lines:
+            # Split the word line back into timing and text
+            parts = word_line.split(' --> ')
+            start_time = parts[0]
+            end_and_word = parts[1].split(' ', 1)
+            end_time = end_and_word[0]
+            word = end_and_word[1] if len(end_and_word) > 1 else ""
+            word = word.upper()
+            
+            # Format as SRT entry
+            result_lines.append(str(sequence_counter))
+            result_lines.append(f"{start_time} --> {end_time}")
+            result_lines.append(word)
+            result_lines.append("")  # Empty line between entries
+            
+            sequence_counter += 1
+    
+    return '\n'.join(result_lines)
+
+def save_srt_file(content, output_path):
+    """
+    Save SRT content to file
+    
+    Args:
+        content (str): SRT content to save
+        output_path (str): Path where to save the file
+    """
+    with open(output_path, 'w', encoding='utf-8') as file:
+        file.write(content)
+
+def process_srt_file_complete(input_path, output_path):
+    """
+    Complete workflow: read SRT file, split words, save result
+    
+    Args:
+        input_path (str): Path to input SRT file
+        output_path (str): Path to save output SRT file
+    """
+    try:
+        subtitles = read_srt_file(input_path)
+        word_split_content = process_srt_file(subtitles)
+        save_srt_file(word_split_content, output_path)
+        print(f"Successfully processed {input_path} -> {output_path}")
+        print(f"Original subtitles: {len(subtitles)}")
+        print(f"Word-split subtitles: {word_split_content.count('-->')}")
+    except Exception as e:
+        print(f"Error processing SRT file: {e}")
+        return ""
