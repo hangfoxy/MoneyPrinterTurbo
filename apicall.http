@@ -1,0 +1,10 @@
+### post auth request
+@baseUrl = http://localhost:8080
+POST {{baseUrl}}/api/v1/allinone
+Content-Type: application/json
+
+{
+  "video_subject": "",
+  "video_language": "",
+  "paragraph_number": 2
+}

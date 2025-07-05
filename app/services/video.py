@@ -52,7 +52,8 @@ audio_codec = "aac"
 # 这里显式抬高音频码率，避免成片阶段因为默认值过低而引入明显失真。
 audio_bitrate = "192k"
 video_codec = "libx264"
-fps = 30
+# fps = 30
+fps = 24
 
 
 def get_ffmpeg_binary():
@@ -637,7 +638,7 @@ def preprocess_video(materials: List[MaterialInfo], clip_duration=4):
 
                 # Output the video to a file.
                 video_file = f"{material_source_path}.mp4"
-                final_clip.write_videofile(video_file, fps=30, logger=None)
+                final_clip.write_videofile(video_file, threads=2, fps=24, logger=None)
                 close_clip(clip)
                 close_clip(final_clip)
                 material.url = video_file
