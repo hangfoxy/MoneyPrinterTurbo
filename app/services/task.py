@@ -12,6 +12,7 @@ from app.models.schema import VideoConcatMode, VideoParams
 from app.services import llm, material, subtitle, video, voice, upload_post
 from app.services import state as sm
 from app.utils import utils
+import shutil
 
 
 def generate_script(task_id, params):
@@ -386,21 +387,38 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
     )
+    import datetime
+    current_time = datetime.datetime.now().strftime("%Y%m%d")
 
     # 6.1 backup the file into google drive when finished execution.
     command = [
         'rclone',
         'copy',
         f'{utils.task_dir(task_id)}',
-        f'gdrive:/Money/{task_id}'
+        f'gdrive:/Money/{current_time}/{task_id}'
     ]
 
-    # Execute the command
     try:
+        # Execute the command update execution folder to cloud
         subprocess.run(command, check=True)
-        print(f"{task_id} Copy successful.")
+        logger.info(f"{task_id} Copy successful.")
+
+        # Remove task folder work after upload
+        tasks_folder = utils.task_dir(task_id)
+        if os.path.isdir(tasks_folder) and tasks_folder != '/':
+            # rm_command = ['rm', '-rf', tasks_folder]
+            # subprocess.run(rm_command, check=True)
+            shutil.rmtree(tasks_folder)
+            logger.info(f'{task_id} Remove Successful ')
+
+        # Remove all cache_videos after download finished.
+        cache_videos_folder = downloaded_videos
+        for cache_file_path in cache_videos_folder:
+            if os.path.isfile(cache_file_path):
+                os.remove(cache_file_path)
+        logger.info(f"{len(cache_videos_folder)} Cache Video of {task_id} Remove Successful")
     except subprocess.CalledProcessError as e:
-        print(f"{task_id} Error occurred: {e}")
+        logger.info(f"{task_id} Error occurred: {e}")
 
     return kwargs
 
